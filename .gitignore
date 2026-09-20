@@ -1,0 +1,19 @@
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# 비밀값
+.env
+
+# 로그
+logs/
+
+# 데이터 산출물
+data/export/
+data/raw/*
+!data/raw/.gitkeep
+data/probe_report.json

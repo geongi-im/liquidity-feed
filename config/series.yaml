@@ -1,0 +1,177 @@
+# 수집 대상 시리즈 정의
+#
+# expected_* 는 대조용 힌트일 뿐이다. 실제 units / frequency /
+# seasonal_adjustment / release / source 는 FRED API 응답을 그대로
+# series_meta 에 저장하고, 환산 로직은 저장된 값을 참조한다.
+# 여기 적힌 값을 코드가 직접 쓰면 안 된다.
+#
+# 주기 문자열이 세 종류라는 점에 주의한다. 같은 "주간" 이라도
+# 기준일과 측정 방식이 다르다.
+#   Weekly, As of Wednesday  수요일 시점값
+#   Weekly, Ending Wednesday 수요일로 끝나는 주의 평균
+#   Weekly, Ending Friday    금요일로 끝나는 주
+#
+# net_liquidity 는 수요일 시점값 기준으로 통일한다.
+#   WALCL - WDTGAL - RRPONTSYD(해당 수요일)
+# 셋 다 As of Wednesday 또는 일간이라 같은 시점을 본다.
+# WTREGEN / WRESBAL 은 주간 평균이라 계산에 쓰지 않고 참조용으로만 적재한다.
+
+series:
+  # Layer 1 - 지급준비금 / 은행시스템 유동성
+  - id: WRESBAL
+    layer: 1
+    name_ko: 지급준비금 (주간평균)
+    expected_units: Millions
+    expected_frequency: Weekly, Ending Wednesday
+  - id: WRBWFRBL
+    layer: 1
+    name_ko: 지급준비금 (수요일 시점)
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+  - id: GDP
+    layer: 1
+    name_ko: 명목 GDP
+    expected_units: Billions
+    expected_frequency: Quarterly
+
+  # Layer 2 - TGA / RRP / 단기 유동성 배관
+  - id: WTREGEN
+    layer: 2
+    name_ko: 재무부 일반계정 TGA (주간평균)
+    expected_units: Millions
+    expected_frequency: Weekly, Ending Wednesday
+  - id: WDTGAL
+    layer: 2
+    name_ko: 재무부 일반계정 TGA (수요일 시점)
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+  - id: RRPONTSYD
+    layer: 2
+    name_ko: 익일물 역레포
+    expected_units: Billions
+    expected_frequency: Daily
+
+  # Layer 3 - Fed 대차대조표 / QT
+  - id: WALCL
+    layer: 3
+    name_ko: Fed 총자산
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+  - id: WSHOSHO
+    layer: 3
+    name_ko: Fed 보유 증권 전체
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+  - id: WSHOTSL
+    layer: 3
+    name_ko: Fed 보유 국채
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+  - id: WSHOMCB
+    layer: 3
+    name_ko: Fed 보유 MBS
+    expected_units: Millions
+    expected_frequency: Weekly, As of Wednesday
+
+  # Layer 4 - M2 / 은행 신용창조
+  - id: M2SL
+    layer: 4
+    name_ko: M2 통화량
+    expected_units: Billions
+    expected_frequency: Monthly
+  - id: M2V
+    layer: 4
+    name_ko: M2 유통속도
+    expected_units: Ratio
+    expected_frequency: Quarterly
+  - id: TOTLL
+    layer: 4
+    name_ko: 은행 총대출
+    expected_units: Billions
+    expected_frequency: Weekly, Ending Wednesday
+  - id: DPSACBW027SBOG
+    layer: 4
+    name_ko: 은행 예금
+    expected_units: Billions
+    expected_frequency: Weekly, Ending Wednesday
+
+  # Layer 5 - 재정 / 국채
+  # WTREGEN / WDTGAL 은 Layer 2 와 공유하므로 여기서 다시 선언하지 않는다.
+  - id: FYGFDPUB
+    layer: 5
+    name_ko: 공공보유 연방부채
+    expected_units: Billions
+    expected_frequency: Annual, Fiscal Year
+  - id: DTB4WK
+    layer: 5
+    name_ko: 4주물 국채 유통수익률
+    expected_units: Percent
+    expected_frequency: Daily
+
+  # Layer 6 - MMF / 시장 내부 유동성
+  - id: MMMFFAQ027S
+    layer: 6
+    name_ko: MMF 총자산
+    expected_units: Millions
+    expected_frequency: Quarterly, End of Period
+
+  # Layer 7 - 신용경색
+  - id: CREACBW027SBOG
+    layer: 7
+    name_ko: 상업용부동산 대출
+    expected_units: Billions
+    expected_frequency: Weekly, Ending Wednesday
+  - id: BUSLOANS
+    layer: 7
+    name_ko: 상공업 대출
+    expected_units: Billions
+    expected_frequency: Monthly
+  - id: DRTSCILM
+    layer: 7
+    name_ko: 대기업 대출기준 강화 비율
+    expected_units: Percent
+    expected_frequency: Quarterly
+  - id: DRTSCIS
+    layer: 7
+    name_ko: 중소기업 대출기준 강화 비율
+    expected_units: Percent
+    expected_frequency: Quarterly
+  - id: STLFSI4
+    layer: 7
+    name_ko: 세인트루이스 연준 금융스트레스지수
+    expected_units: Index
+    expected_frequency: Weekly, Ending Friday
+  - id: NFCI
+    layer: 7
+    name_ko: 시카고 연준 전미금융여건지수
+    expected_units: Index
+    expected_frequency: Weekly, Ending Friday
+
+  # 금리 참조
+  - id: SOFR
+    layer: 0
+    name_ko: 담보부 익일물 조달금리
+    expected_units: Percent
+    expected_frequency: Daily
+  - id: EFFR
+    layer: 0
+    name_ko: 실효 연방기금금리
+    expected_units: Percent
+    expected_frequency: Daily
+  - id: FEDFUNDS
+    layer: 0
+    name_ko: 연방기금금리 월평균
+    expected_units: Percent
+    expected_frequency: Monthly
+
+# 제외한 시리즈와 이유
+#   RESBALNS   2020-08-01 단종. FRED title 에 (DISCONTINUED). WRBWFRBL 로 대체
+#   DTBSPCKFM  README 설명과 다른 시리즈(금융 CP 잔액). DTB4WK 로 대체
+
+# 게시 금지 - ICE Data Indices 저작권 자료
+# 수집도 하지 않는다. DB / JSON / HTML 어디에도 나타나면 안 된다.
+blocked:
+  - id: BAMLH0A0HYM2
+    reason: ICE Data Indices 저작권. 사전 서면 허가 없이 어떤 형태로도 재배포 금지
+  - id: BAMLH0A0HYM2EY
+    reason: ICE Data Indices 저작권. 사전 서면 허가 없이 어떤 형태로도 재배포 금지
