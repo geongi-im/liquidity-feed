@@ -1,0 +1,12 @@
+# 실행과 테스트에 필요한 패키지를 한 파일에 둔다.
+# .venv\Scripts\python.exe -m pip install -r requirements.txt
+
+httpx>=0.28
+pandas>=2.2
+pydantic>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0
+Pillow>=10.0
+
+pytest>=8.0
+ruff>=0.6

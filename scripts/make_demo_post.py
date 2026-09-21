@@ -13,6 +13,7 @@ DB 에서 읽도록 바뀌고 render_post() 는 그대로 쓴다.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -25,13 +26,14 @@ import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
 from liquidity_feed.render import DISCLAIMER, render_post  # noqa: E402
 
 API = "https://api.stlouisfed.org/fred"
 OUT = ROOT / "data" / "export" / "post.html"
+LATEST = ROOT / "data" / "export" / "latest.json"
 WEEKS = 104  # 차트에 싣는 주간 관측치 수. 본문 크기와 직결된다.
 CALL_DELAY_SEC = 0.4
 
@@ -237,6 +239,17 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(body, encoding="utf-8")
 
+    # latest.json 은 게시물과 별개 산출물이다. charts 와 labels 는 게시물
+    # 전용이라 빼고, 시리즈별 출처 기관은 여기에 전부 싣는다(법적 의무 3).
+    latest = {
+        "meta": snapshot["meta"],
+        "layers": snapshot["layers"],
+        "derived": snapshot["derived"],
+    }
+    LATEST.write_text(
+        json.dumps(latest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
     # --- MQWAY 제약 검사 ---
     size = len(body.encode("utf-8"))
     preview = re.sub(r"<(script|style)[^>]*>.*?</>", " ", body, flags=re.S)
@@ -269,6 +282,7 @@ def main() -> int:
     print(f"  {preview}")
     print()
     print(f"산출물: {OUT}")
+    print(f"        {LATEST}")
     return 0 if all(ok for _, ok in checks) else 1
 
 

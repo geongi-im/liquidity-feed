@@ -15,7 +15,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 LOG_DIR = ROOT / "logs"
 
 _LOGGER_NAME = "liquidity_feed"

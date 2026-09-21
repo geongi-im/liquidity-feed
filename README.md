@@ -360,7 +360,7 @@ POST {BASE_URL}/api/board-research
 
 `board-*` 엔드포인트에는 인증 미들웨어가 없다. 별도 키 없이 URL 로 바로
 POST 한다. 게시판은 `board-research`, 작성자는 `admin`, 카테고리는 `유동성`
-으로 고정이므로 환경변수로 받지 않고 `src/liquidity_feed/config.py` 에 둔다.
+으로 고정이므로 환경변수로 받지 않고 `liquidity_feed/config.py` 에 둔다.
 
 응답에서 주의할 점 두 가지다. 형제 프로젝트 krx-daily-brief 의
 `utils/api_util.py` 에서 확인한 규약이다.
@@ -466,9 +466,20 @@ BASE_URL=http://localhost   ->   http://localhost/api/board-research
 python 3.12, httpx, pandas, pydantic (스키마 검증), pyyaml, python-dotenv,
 pytest, ruff. 가상환경은 `.venv` 를 쓴다.
 
+패키지로 설치하지 않는다. 의존성은 `requirements.txt` 하나로 관리하고
+실행과 테스트 모두 프로젝트 루트에서 한다.
+
 ```
 py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+테스트와 린트도 루트에서 `python -m` 으로 부른다. 설치를 안 하므로
+`pytest` 를 바로 부르면 `liquidity_feed` 를 못 찾는다.
+
+```
+.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m ruff check .
 ```
 
 ## 디렉터리 구조
@@ -476,13 +487,13 @@ py -3.12 -m venv .venv
 ```
 liquidity-feed/
   README.md
-  pyproject.toml
+  requirements.txt
   .env.example
   config/
     series.yaml          수집 대상 시리즈 정의
     thresholds.yaml      용어, 해설 문구, 레이어별 임계치
     schedule.yaml        수집과 게시 일정
-  src/liquidity_feed/
+  liquidity_feed/
     __main__.py          CLI 진입점
     config.py            설정 로딩, MQWAY 고정값
     logging_util.py      로그 설정 (logs/ 에 날짜별)

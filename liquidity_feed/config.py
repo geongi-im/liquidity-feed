@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "config"
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
