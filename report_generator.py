@@ -2,7 +2,6 @@
 
 이 모듈은 다음을 만든다.
   - output/export/post.html     MQWAY 에 올라가는 본문 조각
-  - output/export/latest.json   게시물과 별개로 남기는 스냅샷
   - output/export/preview.html  post.html 을 브라우저로 확인하는 문서
   - img/thumbnail.png           게시판 목록 카드 썸네일 (한 번만)
 
@@ -38,7 +37,7 @@ MQWAY 사이트 톤에 맞춘 부분 (mqway.com tailwind.config 에서 확인한
 법적 의무:
   - FRED 면책 문구를 하단에 항상 넣는다.
   - 본문 출처 표기는 FRED 한 줄. 시리즈별 기관과 인용 정보는
-    latest.json 의 meta.sources 가 담당한다.
+    스냅샷 meta.sources 에 모아 두지만 아직 게시물에 싣지 않는다.
   - 연준 로고나 상표는 쓰지 않는다.
 """
 
@@ -55,7 +54,6 @@ from utils.logger_util import LoggerUtil
 ROOT = Path(__file__).resolve().parent
 EXPORT_DIR = ROOT / "output" / "export"
 POST_PATH = EXPORT_DIR / "post.html"
-LATEST_PATH = EXPORT_DIR / "latest.json"
 PREVIEW_PATH = EXPORT_DIR / "preview.html"
 THUMBNAIL_PATH = ROOT / "img" / "thumbnail.png"
 
@@ -255,9 +253,8 @@ def build_summary(derived: dict, labels: dict, as_of_label: str) -> list[str]:
 def render_post(snapshot: dict) -> str:
     """스냅샷 dict 를 MQWAY 본문 HTML 로 만든다.
 
-    snapshot 구조는 output/export/latest.json 과 같고 charts 와 labels 키가
-    게시물용으로 추가된다. labels 는 config/thresholds.yaml 에서 온다.
     LiquidityCalculator.build_snapshot() 이 만든 것을 그대로 받는다.
+    labels 는 config/thresholds.yaml 에서 온다.
     """
     meta = snapshot["meta"]
     derived = snapshot["derived"]
@@ -498,24 +495,11 @@ class ReportGenerator:
         self.logger = LoggerUtil().get_logger()
 
     def create_post(self, snapshot: dict) -> str:
-        """post.html 과 latest.json 을 쓴다. 본문 문자열을 돌려준다."""
+        """post.html 을 쓴다. 본문 문자열을 돌려준다."""
         body = render_post(snapshot)
         POST_PATH.parent.mkdir(parents=True, exist_ok=True)
         POST_PATH.write_text(body, encoding="utf-8")
-
-        # latest.json 은 게시물과 별개 산출물이다. charts 와 labels 는 게시물
-        # 전용이라 빼고, 시리즈별 출처 기관은 여기에 전부 싣는다(법적 의무 3).
-        latest = {
-            "meta": snapshot["meta"],
-            "layers": snapshot["layers"],
-            "derived": snapshot["derived"],
-        }
-        LATEST_PATH.write_text(
-            json.dumps(latest, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
         self.logger.info(f"산출물: {POST_PATH}")
-        self.logger.info(f"        {LATEST_PATH}")
         return body
 
     def create_preview(self, fragment: str, as_of_label: str, out: Path = PREVIEW_PATH) -> Path:

@@ -6,8 +6,7 @@
 
 FRED 는 호출마다 전체 히스토리를 주므로 증분 저장소가 필요 없다. DB 도
 쓰지 않는다. 받은 관측치를 메모리에서 바로 파생 지표로 바꾸고 스냅샷
-dict 로 넘긴다. 그 구조가 report_generator.render_post() 의 입력이자
-latest.json 의 내용이다.
+dict 로 넘긴다. 그 구조가 report_generator.render_post() 의 입력이다.
 
 시리즈 정의와 게시물 문구는 코드가 아니라 config/*.yaml 에 둔다.
 
@@ -20,14 +19,13 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 
 import httpx
 import yaml
 from dotenv import load_dotenv
 
-from report_generator import DISCLAIMER
 from utils.logger_util import LoggerUtil
 
 CONFIG_DIR = Path(__file__).resolve().parent / "config"
@@ -270,9 +268,7 @@ class LiquidityCalculator:
 
         return {
             "meta": {
-                "generated_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
                 "as_of_label": as_of.isoformat(),
-                "disclaimer": DISCLAIMER,
                 "sources": sources,
             },
             "derived": derived,

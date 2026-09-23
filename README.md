@@ -194,13 +194,14 @@ ICE Data Indices 저작권 자료다. FRED 시리즈 노트 원문:
    > This product uses the FRED(R) API but is not endorsed or certified
    > by the Federal Reserve Bank of St. Louis.
 
-   생성하는 JSON 의 `meta.disclaimer` 와 HTML 게시물 하단에 항상 넣는다.
+   HTML 게시물 하단에 항상 넣는다. `main.py` 의 제약 검사가 매번 확인한다.
 
 2. 연준 로고와 상표는 사용하지 않는다.
 
 3. 시리즈별 출처 기관과 인용 문구를 FRED 메타에서 받아 실어 보낸다.
-   하드코딩 금지. 게시물 본문에는 `출처 FRED` 한 줄만 두고, 기관별 상세는
-   `latest.json` 의 `meta.sources` 가 담당한다.
+   하드코딩 금지. **아직 미해결이다.** 기관 정보는 FRED 에서 받아 스냅샷
+   `meta.sources` 에 모으지만, 게시물 본문에는 `출처 FRED` 한 줄만 있고
+   기관별 상세를 싣지 않는다. 본문 하단 등에 실어야 이행된다.
 
 4. FRED 의 핵심 사용자 경험을 복제하거나 대체하는 형태
    (예: 범용 시리즈 검색기) 는 약관 위반 소지가 있으므로 만들지 않는다.
@@ -253,20 +254,9 @@ output/raw/<YYYY-MM-DD>/run.json           실행 기록. 시리즈별 성공 �
 ## 산출물
 
 ```
-output/export/latest.json
-  {
-    "meta": { "generated_at": ..., "as_of_label": ..., "disclaimer": "...",
-              "sources": [{ "name": ..., "release": ... }] },
-    "layers": [
-      { "layer": 1, "series_id": "...", "name_ko": "...", "display": "...",
-        "delta_week": ..., "delta_month": ..., "as_of": "..." }
-    ],
-    "derived": { "net_liquidity": ..., "reserves_to_gdp": ... }
-  }
-
 output/export/series/<SERIES_ID>.json   시리즈별 시계열 (차트용)
 output/export/post.html                 MQWAY 게시용 HTML 본문 (조각)
-output/export/preview.html              post.html 을 브라우저에서 확인하는 용도
+output/export/preview.html              post.html 을 브라우저에서 확인하는 용도 (--preview 일 때만)
 ```
 
 `output/export/` 는 저장소에 커밋하지 않는다. 생성 스크립트만 커밋한다.
@@ -274,8 +264,9 @@ output/export/preview.html              post.html 을 브라우저에서 확인�
 ## CLI
 
 ```
-python main.py               FRED 수집 -> post.html -> 제약 검사 -> preview.html
+python main.py               FRED 수집 -> post.html -> 제약 검사
 python main.py --send        위와 같고 MQWAY 로 실제 전송까지 한다
+python main.py --preview     preview.html 도 만든다 (--send 와 함께 써도 된다)
 python main.py --check       환경 자가진단
 python main.py --thumbnail   img/thumbnail.png 생성 (한 번만)
 ```
@@ -483,7 +474,7 @@ liquidity-feed/
     schedule.yaml        수집과 게시 일정
   main.py                진입점. 수집 -> 생성 -> 검사 -> 게시, 환경 자가진단
   fred_service.py        FRED 수집(FredDataCollector)과 파생 지표 계산(LiquidityCalculator)
-  report_generator.py    post.html / latest.json / preview.html / 썸네일 생성
+  report_generator.py    post.html / preview.html / 썸네일 생성
   utils/
     api_util.py          MQWAY API 전송
     logger_util.py       로그 설정 (logs/ 에 날짜별)
@@ -503,7 +494,7 @@ liquidity-feed/
 2. WRESBAL 2026-09-16 값이 3013794 (Millions) 로 들어온다
 3. WTREGEN 2026-09-16 값이 877028 (Millions) 로 들어온다
 4. 단위 환산 후 지급준비금이 3.013794 (조 달러) 로 나온다
-5. `latest.json` 에 disclaimer 문구가 포함된다
+5. `post.html` 하단에 FRED 면책 문구가 포함된다
 6. BAMLH0A0HYM2 계열이 JSON, HTML 어디에도 나타나지 않는다
 7. 같은 입력으로 두 번 실행하면 같은 결과가 나온다
 8. 공식 API 와 CSV 두 경로의 값이 겹치는 날짜에서 모두 일치한다

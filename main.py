@@ -2,6 +2,7 @@
 
   python main.py               전체 실행. 본문만 만들고 전송하지 않는다
   python main.py --send        MQWAY 로 실제 전송까지
+  python main.py --preview     output/export/preview.html 도 만든다 (--send 와 함께 써도 된다)
   python main.py --check       환경 자가진단. 스케줄러에 걸기 전에 한 번
   python main.py --thumbnail   img/thumbnail.png 생성 (한 번만)
 
@@ -92,8 +93,8 @@ class LiquidityFeedService:
             ("게시 금지 시리즈가 본문에 없다", no_blocked),
             ("FRED 면책 문구가 들어 있다", DISCLAIMER in body),
             ("ECharts 5.4.3 을 직접 불러온다", "echarts@5.4.3" in body),
-            # 본문 출처는 FRED 한 줄로 줄였다. 시리즈별 기관과 인용 정보는
-            # latest.json 의 meta.sources 가 담당한다(법적 의무 3).
+            # 본문 출처는 FRED 한 줄로 줄였다. 시리즈별 기관은 스냅샷에만
+            # 있고 아직 게시물에 싣지 않는다(법적 의무 3, README 참고).
             ("본문 출처가 FRED 한 줄이다", "<p>출처 FRED</p>" in body),
             ("기관 정보가 스냅샷 meta.sources 에 있다", len(snapshot["meta"]["sources"]) > 0),
         ]
@@ -154,8 +155,8 @@ class LiquidityFeedService:
         self.telegram.send_message(self.telegram.success_message(title, url, facts))
         return result
 
-    def run(self, send: bool = False) -> int:
-        """수집 -> 본문 생성 -> 검사 -> 확인용 문서 -> 게시."""
+    def run(self, send: bool = False, preview: bool = False) -> int:
+        """수집 -> 본문 생성 -> 검사 -> 게시. preview 면 확인용 문서도 만든다."""
         try:
             data, sources = self.collector.collect()
             snapshot = self.calculator.build_snapshot(data, sources)
@@ -171,7 +172,8 @@ class LiquidityFeedService:
             self.logger.error("MQWAY 제약 검사 실패. 게시하지 않는다")
             return 1
 
-        self.report.create_preview(body, as_of)
+        if preview:
+            self.report.create_preview(body, as_of)
         self.publish(
             post_title(as_of), body, build_notify_facts(snapshot["derived"]), send
         )
@@ -318,7 +320,7 @@ def main() -> int:
         service.report.create_thumbnail()
         return 0
 
-    return service.run(send="--send" in args)
+    return service.run(send="--send" in args, preview="--preview" in args)
 
 
 if __name__ == "__main__":
