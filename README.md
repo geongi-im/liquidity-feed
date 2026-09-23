@@ -20,17 +20,11 @@ JSON 스냅샷을 만드는 프로젝트.
 | `config/series.yaml` | 26개 시리즈 확정. 전량 수집 확인 |
 | `config/thresholds.yaml` | 용어와 해설 문구 작성. 임계치는 미정 |
 | `config/schedule.yaml` | 일정 확정 |
-| `render.py` | 동작. 게시물 HTML 생성 |
-| `fetch` / `derive` / `export` / `publish` | 미구현. `scripts/make_demo_post.py` 가 임시로 대신한다 |
-
-`scripts/` 아래 도구 네 개는 동작한다.
-
-```
-probe_fred.py       26개 시리즈 수집 가능 여부와 메타데이터 점검
-verify_data.py      공식 API 와 CSV 두 경로 값 대조, 산술 항등식 검사
-make_demo_post.py   FRED 에서 직접 받아 post.html 생성 + MQWAY 제약 검사
-make_preview.py     post.html 을 브라우저에서 열 수 있는 문서로 감싼다
-```
+| `utils/render_util.py` | 동작. 게시물 HTML 생성 |
+| `utils/fred_util.py` | 동작. FRED 수집과 파생 지표 계산 |
+| `utils/api_util.py` | 동작. MQWAY 전송 |
+| `main.py` | 동작. 수집부터 게시까지 한 번에 |
+| raw 저장 / 증분 수집 | 미구현. FRED 가 호출마다 전체 히스토리를 주므로 급하지 않다 |
 
 ## 데이터 출처
 
@@ -64,8 +58,8 @@ https://fred.stlouisfed.org/graph/fredgraph.csv?id=<SERIES_ID>
   행 수를 비교하는 검사에서는 이 차이를 감안해야 한다
 - 문서화된 API 가 아니므로 운영에서는 쓰지 않는다
 
-두 경로의 값은 겹치는 날짜에서 완전히 일치한다. `scripts/verify_data.py` 가
-26개 시리즈 전량을 대조한다.
+두 경로의 값은 겹치는 날짜에서 완전히 일치한다. 26개 시리즈 전량을
+대조해 확인했다.
 
 ## 수집 대상 시리즈
 
@@ -191,7 +185,7 @@ ICE Data Indices 저작권 자료다. FRED 시리즈 노트 원문:
 내부 참고용으로라도 외부 노출 JSON 이나 게시물에 절대 포함하지 않는다.
 
 `tests/test_config.py` 가 이 목록이 수집 대상에 섞이지 않는지 검사하고,
-`make_demo_post.py` 가 생성된 본문에 나타나지 않는지 다시 검사한다.
+`main.py` 의 제약 검사가 생성된 본문에 나타나지 않는지 다시 검사한다.
 
 ## 법적 의무
 
@@ -213,7 +207,7 @@ ICE Data Indices 저작권 자료다. FRED 시리즈 노트 원문:
 
 5. 참고한 대시보드의 한국어 판정 문구와 임계치 설명은 그쪽 창작물이다.
    복사하지 않는다. 임계치와 해설은 직접 정의해 `config/thresholds.yaml` 로
-   관리하고 코드와 분리한다. `render.py` 에는 설명 문구가 한 줄도 없다.
+   관리하고 코드와 분리한다. `utils/render_util.py` 에는 설명 문구가 한 줄도 없다.
 
 ## 파생 지표
 
@@ -247,9 +241,9 @@ MQWAY 에 적재되므로 중간에 둘 저장소가 필요 없다. 26개 시리
 단계 사이에 데이터를 넘길 때는 원본 응답 파일을 쓴다.
 
 ```
-data/raw/<YYYY-MM-DD>/<SERIES_ID>.json   FRED 응답 원본
-data/raw/<YYYY-MM-DD>/meta.json          시리즈 메타와 출처
-data/raw/<YYYY-MM-DD>/run.json           실행 기록. 시리즈별 성공 여부와 오류
+output/raw/<YYYY-MM-DD>/<SERIES_ID>.json   FRED 응답 원본
+output/raw/<YYYY-MM-DD>/meta.json          시리즈 메타와 출처
+output/raw/<YYYY-MM-DD>/run.json           실행 기록. 시리즈별 성공 여부와 오류
 ```
 
 최근 8회분만 남기고 지운다(`config/schedule.yaml` 의 `retention.raw_runs`).
@@ -259,7 +253,7 @@ data/raw/<YYYY-MM-DD>/run.json           실행 기록. 시리즈별 성공 여�
 ## 산출물
 
 ```
-data/export/latest.json
+output/export/latest.json
   {
     "meta": { "generated_at": ..., "as_of_label": ..., "disclaimer": "...",
               "sources": [{ "name": ..., "release": ... }] },
@@ -270,35 +264,28 @@ data/export/latest.json
     "derived": { "net_liquidity": ..., "reserves_to_gdp": ... }
   }
 
-data/export/series/<SERIES_ID>.json   시리즈별 시계열 (차트용)
-data/export/post.html                 MQWAY 게시용 HTML 본문 (조각)
-data/export/preview.html              post.html 을 브라우저에서 확인하는 용도
+output/export/series/<SERIES_ID>.json   시리즈별 시계열 (차트용)
+output/export/post.html                 MQWAY 게시용 HTML 본문 (조각)
+output/export/preview.html              post.html 을 브라우저에서 확인하는 용도
 ```
 
-`data/export/` 는 저장소에 커밋하지 않는다. 생성 스크립트만 커밋한다.
+`output/export/` 는 저장소에 커밋하지 않는다. 생성 스크립트만 커밋한다.
 
 ## CLI
 
 ```
-python -m liquidity_feed check                     환경 자가진단
-python -m liquidity_feed fetch [--series ID] [--full | --incremental]
-python -m liquidity_feed derive
-python -m liquidity_feed export
-python -m liquidity_feed publish [--send]
+python main.py               FRED 수집 -> post.html -> 제약 검사 -> preview.html
+python main.py --send        위와 같고 MQWAY 로 실제 전송까지 한다
+python main.py --check       환경 자가진단
+python main.py --thumbnail   img/thumbnail.png 생성 (한 번만)
 ```
 
-- `check` 는 동작한다. 스케줄러에 걸기 전에 한 번 돌린다.
-- `publish` 는 **기본값이 전송 안 함**이다. `--send` 를 붙여야 실제로 올라간다.
+- **기본값이 전송 안 함**이다. `--send` 를 붙여야 실제로 올라간다.
   실서버에 잘못 올라간 글은 지우기 전까지 되돌릴 수 없어서 이렇게 뒤집었다.
-- `fetch` / `derive` / `export` 는 아직 미구현이다. 당장은 아래로 대신한다.
-
-```
-python scripts/make_demo_post.py    FRED 수집부터 post.html 생성까지
-python scripts/make_preview.py      preview.html 생성
-python scripts/verify_data.py       두 경로 값 대조와 항등식 검사
-python scripts/probe_fred.py        시리즈 수집 가능 여부 점검
-python scripts/make_thumbnail.py    img/thumbnail.png 생성 (한 번만)
-```
+- `--check` 는 스케줄러에 걸기 전에 한 번 돌린다.
+- 제약 검사를 하나라도 통과하지 못하면 게시하지 않고 종료 코드 1 을 낸다.
+- 전송 실패는 생성 실패가 아니다. post.html 은 이미 저장돼 있어 나중에
+  다시 보낼 수 있으므로 종료 코드 0 을 유지한다.
 
 ## 스케줄
 
@@ -323,7 +310,7 @@ H.8   (은행 대출, 예금, 상업용부동산)  금 15:18 CT -> 토 05:18 KST
 수집을 더 자주 할 이유는 없다. FRED 가 호출마다 전체 시계열을 주므로
 토요일 한 번 호출에 그 주 평일 값이 전부 따라온다. 26개 중 매일 바뀌는 것은
 RRPONTSYD / DTB4WK / SOFR / EFFR 네 개뿐이고, 이것도 주 1회 호출에 다 담긴다.
-`data/export/series/*.json` 을 매일 갱신해야 하는 화면이 생기면 그때 매일로
+`output/export/series/*.json` 을 매일 갱신해야 하는 화면이 생기면 그때 매일로
 바꾼다.
 
 재시도는 두 층이다.
@@ -360,7 +347,7 @@ POST {BASE_URL}/api/board-research
 
 `board-*` 엔드포인트에는 인증 미들웨어가 없다. 별도 키 없이 URL 로 바로
 POST 한다. 게시판은 `board-research`, 작성자는 `admin`, 카테고리는 `유동성`
-으로 고정이므로 환경변수로 받지 않고 `liquidity_feed/config.py` 에 둔다.
+으로 고정이므로 환경변수로 받지 않고 `utils/config_util.py` 에 둔다.
 
 응답에서 주의할 점 두 가지다. 형제 프로젝트 krx-daily-brief 의
 `utils/api_util.py` 에서 확인한 규약이다.
@@ -399,7 +386,7 @@ HTTP 200 이어도 본문 success 가 false 면 실패다. 상태 코드만 보�
 4. **CSS 격리**
    본문이 MQWAY 페이지에 그대로 삽입되므로 선택자를 전부 `.lf-root` 아래로
    한정한다. `body`, `html`, `*`, `:root` 같은 전역 선택자와 `!important` 를
-   쓰지 않는다. `make_demo_post.py` 가 이를 검사한다.
+   쓰지 않는다. `main.py` 의 제약 검사가 이를 확인한다.
 
 ### 게시판 선택
 
@@ -475,7 +462,7 @@ py -3.12 -m venv .venv
 ```
 
 테스트와 린트도 루트에서 `python -m` 으로 부른다. 설치를 안 하므로
-`pytest` 를 바로 부르면 `liquidity_feed` 를 못 찾는다.
+`pytest` 를 바로 부르면 `utils` 를 못 찾는다.
 
 ```
 .venv\Scripts\python.exe -m pytest
@@ -493,26 +480,20 @@ liquidity-feed/
     series.yaml          수집 대상 시리즈 정의
     thresholds.yaml      용어, 해설 문구, 레이어별 임계치
     schedule.yaml        수집과 게시 일정
-  liquidity_feed/
-    __main__.py          CLI 진입점
-    config.py            설정 로딩, MQWAY 고정값
-    logging_util.py      로그 설정 (logs/ 에 날짜별)
-    notify.py            텔레그램 알림
-    selftest.py          환경 자가진단 (check 명령)
-    fred.py              FRED API 클라이언트
-    derive.py            파생 지표 계산
-    export.py            JSON 스냅샷 생성
-    render.py            HTML 본문 생성
-    publish.py           MQWAY API 전송
-  scripts/
-    probe_fred.py        수집 가능 여부 점검
-    verify_data.py       두 경로 값 대조
-    make_demo_post.py    post.html 생성
-    make_preview.py      preview.html 생성
-    make_thumbnail.py    썸네일 생성
+  main.py                진입점. 수집 -> 생성 -> 검사 -> 게시
+  utils/
+    config_util.py       설정 로딩, MQWAY 고정값
+    logger_util.py       로그 설정 (logs/ 에 날짜별)
+    telegram_util.py     텔레그램 알림
+    selftest_util.py     환경 자가진단 (--check)
+    fred_util.py         FRED 수집과 파생 지표 계산
+    render_util.py       게시용 HTML 본문 생성
+    preview_util.py      브라우저 확인용 문서 생성
+    thumbnail_util.py    썸네일 생성
+    api_util.py          MQWAY API 전송
   img/
     thumbnail.png        게시판 목록 카드 이미지
-  data/
+  output/
     raw/                 FRED 응답 원본 (최근 8회분)
     export/              산출물
   logs/                  실행 로그 (커밋하지 않는다)

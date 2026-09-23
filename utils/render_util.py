@@ -234,8 +234,9 @@ def build_summary(derived: dict, labels: dict, as_of_label: str) -> list[str]:
 def render_post(snapshot: dict) -> str:
     """스냅샷 dict 를 MQWAY 본문 HTML 로 만든다.
 
-    snapshot 구조는 data/export/latest.json 과 같고 charts 와 labels 키가
+    snapshot 구조는 output/export/latest.json 과 같고 charts 와 labels 키가
     게시물용으로 추가된다. labels 는 config/thresholds.yaml 에서 온다.
+    FredUtil.build_snapshot() 이 만든 것을 그대로 받는다.
     """
     meta = snapshot["meta"]
     derived = snapshot["derived"]

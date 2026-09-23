@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 .venv/
-*.egg-info/
 .pytest_cache/
 .ruff_cache/
 
@@ -12,8 +11,8 @@ __pycache__/
 # 로그
 logs/
 
-# 데이터 산출물
-data/export/
-data/raw/*
-!data/raw/.gitkeep
-data/probe_report.json
+# 산출물
+output/export/
+output/raw/*
+!output/raw/.gitkeep
+output/probe_report.json

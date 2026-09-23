@@ -6,7 +6,6 @@
 
 이 프로젝트는 DB 를 쓰지 않는다. FRED 가 호출마다 전체 히스토리를 주고
 최종 결과는 MQWAY 에 적재되므로 중간에 둘 저장소가 필요 없다.
-단계 사이에 데이터를 넘길 때는 data/raw 아래 원본 응답 파일을 쓴다.
 """
 
 from __future__ import annotations
@@ -19,11 +18,12 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "config"
-DATA_DIR = ROOT / "data"
-RAW_DIR = DATA_DIR / "raw"
-EXPORT_DIR = DATA_DIR / "export"
+OUTPUT_DIR = ROOT / "output"
+RAW_DIR = OUTPUT_DIR / "raw"
+EXPORT_DIR = OUTPUT_DIR / "export"
 
 load_dotenv(ROOT / ".env")
+
 
 class MissingSettingError(RuntimeError):
     """필수 환경변수가 없을 때. 어떤 값을 어떻게 채우는지 메시지에 담는다."""
@@ -77,6 +77,11 @@ def load_series() -> dict:
 def load_thresholds() -> dict:
     """config/thresholds.yaml 을 읽는다."""
     return yaml.safe_load((CONFIG_DIR / "thresholds.yaml").read_text(encoding="utf-8"))
+
+
+def load_schedule() -> dict:
+    """config/schedule.yaml 을 읽는다."""
+    return yaml.safe_load((CONFIG_DIR / "schedule.yaml").read_text(encoding="utf-8"))
 
 
 def blocked_ids() -> set[str]:

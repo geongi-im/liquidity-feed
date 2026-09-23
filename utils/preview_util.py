@@ -13,17 +13,14 @@
 
 from __future__ import annotations
 
-import re
-import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+from utils.config_util import EXPORT_DIR
+from utils.logger_util import LoggerUtil
+from utils.render_util import post_title
 
-from liquidity_feed.render import post_title  # noqa: E402
-
-POST = ROOT / "data" / "export" / "post.html"
-OUT = ROOT / "data" / "export" / "preview.html"
+POST_PATH = EXPORT_DIR / "post.html"
+PREVIEW_PATH = EXPORT_DIR / "preview.html"
 
 # mqway.com 의 body 설정값. 게시물이 실제로 놓이는 바닥을 그대로 재현한다.
 PAGE_CSS = (
@@ -39,22 +36,14 @@ FONTS = (
 )
 
 
-def main() -> int:
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
+class PreviewUtil:
+    def __init__(self):
+        self.logger = LoggerUtil().get_logger()
 
-    if not POST.exists():
-        print("post.html 이 없다. scripts/make_demo_post.py 를 먼저 돌린다.")
-        return 2
-
-    fragment = POST.read_text(encoding="utf-8")
-
-    found = re.search(r"(\d{4}-\d{2}-\d{2}) 기준", fragment)
-    as_of = found.group(1) if found else "-"
-    title = post_title(as_of)
-
-    page = f"""<!doctype html>
+    def build(self, fragment: str, as_of_label: str, out: Path = PREVIEW_PATH) -> Path:
+        """본문 조각을 감싼 확인용 문서를 만든다."""
+        title = post_title(as_of_label)
+        page = f"""<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -73,14 +62,14 @@ def main() -> int:
 </body>
 </html>"""
 
-    OUT.write_text(page, encoding="utf-8")
-    body_size = len(fragment.encode("utf-8"))
-    print(f"본문 {body_size:,} B (MQWAY 상한 65,536 B, 여유 {65536 - body_size:,} B)")
-    print(f"감싸개까지 {len(page.encode('utf-8')):,} B")
-    print(f"산출물: {OUT}")
-    print(f"브라우저에서 열기: {OUT.as_uri()}")
-    return 0
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(page, encoding="utf-8")
 
-
-if __name__ == "__main__":
-    sys.exit(main())
+        body_size = len(fragment.encode("utf-8"))
+        self.logger.info(
+            f"본문 {body_size:,} B (MQWAY 상한 65,536 B, 여유 {65536 - body_size:,} B)"
+        )
+        self.logger.info(f"감싸개까지 {len(page.encode('utf-8')):,} B")
+        self.logger.info(f"확인용 문서: {out}")
+        self.logger.info(f"브라우저에서 열기: {out.as_uri()}")
+        return out
