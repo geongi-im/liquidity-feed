@@ -20,10 +20,10 @@ JSON 스냅샷을 만드는 프로젝트.
 | `config/series.yaml` | 26개 시리즈 확정. 전량 수집 확인 |
 | `config/thresholds.yaml` | 용어와 해설 문구 작성. 임계치는 미정 |
 | `config/schedule.yaml` | 일정 확정 |
-| `utils/render_util.py` | 동작. 게시물 HTML 생성 |
-| `utils/fred_util.py` | 동작. FRED 수집과 파생 지표 계산 |
+| `fred_service.py` | 동작. FRED 수집과 파생 지표 계산 |
+| `report_generator.py` | 동작. 게시물 HTML, 확인용 문서, 썸네일 생성 |
 | `utils/api_util.py` | 동작. MQWAY 전송 |
-| `main.py` | 동작. 수집부터 게시까지 한 번에 |
+| `main.py` | 동작. 수집부터 게시까지 한 번에, 환경 자가진단 |
 | raw 저장 / 증분 수집 | 미구현. FRED 가 호출마다 전체 히스토리를 주므로 급하지 않다 |
 
 ## 데이터 출처
@@ -207,7 +207,7 @@ ICE Data Indices 저작권 자료다. FRED 시리즈 노트 원문:
 
 5. 참고한 대시보드의 한국어 판정 문구와 임계치 설명은 그쪽 창작물이다.
    복사하지 않는다. 임계치와 해설은 직접 정의해 `config/thresholds.yaml` 로
-   관리하고 코드와 분리한다. `utils/render_util.py` 에는 설명 문구가 한 줄도 없다.
+   관리하고 코드와 분리한다. `report_generator.py` 에는 설명 문구가 한 줄도 없다.
 
 ## 파생 지표
 
@@ -347,7 +347,8 @@ POST {BASE_URL}/api/board-research
 
 `board-*` 엔드포인트에는 인증 미들웨어가 없다. 별도 키 없이 URL 로 바로
 POST 한다. 게시판은 `board-research`, 작성자는 `admin`, 카테고리는 `유동성`
-으로 고정이므로 환경변수로 받지 않고 `utils/config_util.py` 에 둔다.
+으로 고정이므로 환경변수로 받지 않는다. 게시판은 `utils/api_util.py`, 작성자와
+카테고리는 `main.py` 에 둔다.
 
 응답에서 주의할 점 두 가지다. 형제 프로젝트 krx-daily-brief 의
 `utils/api_util.py` 에서 확인한 규약이다.
@@ -480,17 +481,13 @@ liquidity-feed/
     series.yaml          수집 대상 시리즈 정의
     thresholds.yaml      용어, 해설 문구, 레이어별 임계치
     schedule.yaml        수집과 게시 일정
-  main.py                진입점. 수집 -> 생성 -> 검사 -> 게시
+  main.py                진입점. 수집 -> 생성 -> 검사 -> 게시, 환경 자가진단
+  fred_service.py        FRED 수집(FredDataCollector)과 파생 지표 계산(LiquidityCalculator)
+  report_generator.py    post.html / latest.json / preview.html / 썸네일 생성
   utils/
-    config_util.py       설정 로딩, MQWAY 고정값
+    api_util.py          MQWAY API 전송
     logger_util.py       로그 설정 (logs/ 에 날짜별)
     telegram_util.py     텔레그램 알림
-    selftest_util.py     환경 자가진단 (--check)
-    fred_util.py         FRED 수집과 파생 지표 계산
-    render_util.py       게시용 HTML 본문 생성
-    preview_util.py      브라우저 확인용 문서 생성
-    thumbnail_util.py    썸네일 생성
-    api_util.py          MQWAY API 전송
   img/
     thumbnail.png        게시판 목록 카드 이미지
   output/

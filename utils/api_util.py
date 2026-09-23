@@ -20,19 +20,19 @@ output/export/post.html 이 그 조각이고, preview.html 은 확인용이라 �
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
-from utils.config_util import (
-    MQWAY_BOARD,
-    MQWAY_CATEGORY,
-    MQWAY_WRITER,
-    ROOT,
-    base_url,
-    mqway_endpoint,
-)
 from utils.logger_util import LoggerUtil
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+# 게시판은 바뀌지 않으므로 고정한다. board-* 엔드포인트에는 인증
+# 미들웨어가 없다. 키 없이 URL 로 바로 POST 한다.
+MQWAY_BOARD = "board-research"
 
 # 서버가 응답하지 않을 때 무한 대기하지 않도록 반드시 건다.
 TIMEOUT_SEC = 30.0
@@ -46,10 +46,36 @@ TITLE_MAX = 255
 CATEGORY_MAX = 50
 WRITER_MAX = 50
 
-# 게시판 목록 카드에 걸리는 고정 썸네일. ThumbnailUtil 이 만든다.
-THUMBNAIL_PATH = ROOT / "img" / "thumbnail.png"
 THUMBNAIL_MAX_BYTES = 1 * 1024 * 1024
 THUMBNAIL_MAX_WIDTH = 800
+
+
+class MissingSettingError(RuntimeError):
+    """필수 환경변수가 없을 때. 어떤 값을 어떻게 채우는지 메시지에 담는다."""
+
+
+def base_url() -> str:
+    """사이트 주소. 스킴과 호스트까지만. 게시물 조회 URL 조립에도 쓴다.
+
+    BASE_URL 은 스킴과 호스트까지만 적고 /api 는 코드가 붙인다.
+    형제 프로젝트가 같은 규칙을 쓰므로 .env 를 공유할 수 있다.
+      BASE_URL=http://localhost   ->  http://localhost/api/board-research
+
+    기본값을 두지 않는다. 기본값이 있으면 .env 를 빠뜨린 채 실행했을 때
+    운영 서버로 글이 올라간다. 형제 프로젝트도 같은 이유로 막아둔다.
+    """
+    value = os.getenv("BASE_URL", "").strip()
+    if not value:
+        raise MissingSettingError(
+            "환경변수 BASE_URL 이 없다. .env 에 설정한다 (.env.example 참고). "
+            "예) BASE_URL=http://localhost"
+        )
+    return value.rstrip("/")
+
+
+def mqway_endpoint() -> str:
+    """게시물을 POST 할 주소."""
+    return f"{base_url()}/api/{MQWAY_BOARD}"
 
 
 class ApiError(Exception):
@@ -161,9 +187,9 @@ class ApiUtil:
         self,
         title: str,
         content: str,
-        category: str = MQWAY_CATEGORY,
-        writer: str = MQWAY_WRITER,
-        thumbnail_path: Path | None = THUMBNAIL_PATH,
+        category: str,
+        writer: str,
+        thumbnail_path: Path | None = None,
     ) -> dict:
         """게시글을 만든다. 성공하면 응답 dict 를, 실패하면 ApiError 를 낸다."""
         self.check_payload(title, content, category, writer)

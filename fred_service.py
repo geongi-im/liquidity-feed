@@ -1,8 +1,15 @@
-"""FRED 수집과 파생 지표 계산.
+"""FRED 유동성 데이터 서비스 모듈.
 
-FRED 는 호출마다 전체 히스토리를 주므로 증분 저장소가 필요 없다.
-받은 관측치를 메모리에서 바로 파생 지표로 바꾸고 스냅샷 dict 로 넘긴다.
-그 구조가 RenderUtil.render_post() 의 입력이자 latest.json 의 내용이다.
+이 모듈은 다음 기능을 제공한다.
+  - FRED API 로 시리즈 관측치와 출처 기관 수집 (FredDataCollector)
+  - 순유동성 등 파생 지표 계산과 게시물 스냅샷 생성 (LiquidityCalculator)
+
+FRED 는 호출마다 전체 히스토리를 주므로 증분 저장소가 필요 없다. DB 도
+쓰지 않는다. 받은 관측치를 메모리에서 바로 파생 지표로 바꾸고 스냅샷
+dict 로 넘긴다. 그 구조가 report_generator.render_post() 의 입력이자
+latest.json 의 내용이다.
+
+시리즈 정의와 게시물 문구는 코드가 아니라 config/*.yaml 에 둔다.
 
 단위 환산은 시리즈마다 다르다. 연준 대차대조표 계열은 Millions,
 역레포와 GDP 계열은 Billions 로 온다. 둘을 섞으면 순유동성이 1000배
@@ -11,14 +18,21 @@ FRED 는 호출마다 전체 히스토리를 주므로 증분 저장소가 필�
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import httpx
+import yaml
+from dotenv import load_dotenv
 
-from utils.config_util import blocked_ids, env, load_series, load_thresholds
+from report_generator import DISCLAIMER
 from utils.logger_util import LoggerUtil
-from utils.render_util import DISCLAIMER
+
+CONFIG_DIR = Path(__file__).resolve().parent / "config"
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 API = "https://api.stlouisfed.org/fred"
 
@@ -70,6 +84,25 @@ class FredError(RuntimeError):
     """수집 실패. 파이프라인을 여기서 멈춘다."""
 
 
+def load_series() -> dict:
+    """config/series.yaml 을 읽는다."""
+    return yaml.safe_load((CONFIG_DIR / "series.yaml").read_text(encoding="utf-8"))
+
+
+def load_thresholds() -> dict:
+    """config/thresholds.yaml 을 읽는다. 게시물 용어와 해설 문구가 여기 있다."""
+    return yaml.safe_load((CONFIG_DIR / "thresholds.yaml").read_text(encoding="utf-8"))
+
+
+def blocked_ids() -> set[str]:
+    """게시 금지 시리즈 ID 집합. 수집 / 출력 전 단계에서 걸러낸다."""
+    return {item["id"] for item in load_series().get("blocked", [])}
+
+
+def api_key() -> str:
+    return os.getenv("FRED_API_KEY", "").strip()
+
+
 def pct_change(series: dict[date, float], as_of: date, days: int) -> float | None:
     """as_of 기준 days 일 전 대비 변화율. 그 이전 관측치 중 가장 가까운 값을 쓴다."""
     if as_of not in series:
@@ -97,12 +130,12 @@ def abs_change(
     return (series[as_of] - series[max(earlier)]) / scale
 
 
-class FredUtil:
+class FredDataCollector:
     def __init__(self):
         self.logger = LoggerUtil().get_logger()
 
     def _get(self, client: httpx.Client, path: str, **params) -> dict:
-        params.update({"api_key": env("FRED_API_KEY"), "file_type": "json"})
+        params.update({"api_key": api_key(), "file_type": "json"})
         resp = client.get(f"{API}/{path}", params=params, timeout=TIMEOUT_SEC)
         resp.raise_for_status()
         time.sleep(CALL_DELAY_SEC)
@@ -119,7 +152,7 @@ class FredUtil:
 
     def collect(self) -> tuple[dict[str, dict[date, float]], list[dict]]:
         """시리즈 관측치와 출처 기관 정보를 받는다."""
-        if not env("FRED_API_KEY"):
+        if not api_key():
             raise FredError("FRED_API_KEY 가 없다. .env 를 확인한다")
 
         blocked = blocked_ids()
@@ -146,6 +179,11 @@ class FredUtil:
                 sources[rel["id"]] = {"name": org["name"], "release": rel["name"]}
 
         return data, sorted(sources.values(), key=lambda s: s["name"])
+
+
+class LiquidityCalculator:
+    def __init__(self):
+        self.logger = LoggerUtil().get_logger()
 
     def build_snapshot(self, data: dict[str, dict[date, float]], sources: list[dict]) -> dict:
         """관측치를 게시물 스냅샷으로 만든다.

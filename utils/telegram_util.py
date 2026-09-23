@@ -16,14 +16,22 @@
 from __future__ import annotations
 
 import html as html_mod
+import os
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
-from utils.config_util import env
 from utils.logger_util import LoggerUtil
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 API = "https://api.telegram.org"
 TIMEOUT_SEC = 15.0
+
+
+def env(name: str) -> str:
+    return os.getenv(name, "").strip()
 
 
 class TelegramUtil:
@@ -68,7 +76,7 @@ class TelegramUtil:
 
         훑어보는 알림이라 짧게 유지한다. 제목, 핵심 수치 몇 줄, 링크로 끝낸다.
         자세한 내용은 게시물을 열어서 본다. facts 는
-        RenderUtil.build_notify_facts() 가 만든다.
+        report_generator.build_notify_facts() 가 만든다.
         """
         lines = [f"📈 <b>{html_mod.escape(title)}</b>", ""]
         lines += [html_mod.escape(line) for line in facts]

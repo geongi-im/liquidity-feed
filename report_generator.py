@@ -1,4 +1,13 @@
-"""MQWAY 게시용 HTML 본문 생성.
+"""MQWAY 게시물 생성 모듈.
+
+이 모듈은 다음을 만든다.
+  - output/export/post.html     MQWAY 에 올라가는 본문 조각
+  - output/export/latest.json   게시물과 별개로 남기는 스냅샷
+  - output/export/preview.html  post.html 을 브라우저로 확인하는 문서
+  - img/thumbnail.png           게시판 목록 카드 썸네일 (한 번만)
+
+본문은 render_post() 가 스냅샷 dict 에서 문자열로 만든다. 파일 쓰기는
+ReportGenerator 가 맡는다.
 
 MQWAY 제약 때문에 지켜야 하는 것들:
   - 본문 최상단에 텍스트 요약을 둔다. 게시판 목록이 strip_tags() 로
@@ -37,6 +46,18 @@ from __future__ import annotations
 
 import html
 import json
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+from utils.logger_util import LoggerUtil
+
+ROOT = Path(__file__).resolve().parent
+EXPORT_DIR = ROOT / "output" / "export"
+POST_PATH = EXPORT_DIR / "post.html"
+LATEST_PATH = EXPORT_DIR / "latest.json"
+PREVIEW_PATH = EXPORT_DIR / "preview.html"
+THUMBNAIL_PATH = ROOT / "img" / "thumbnail.png"
 
 ECHARTS_SRC = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"
 
@@ -236,7 +257,7 @@ def render_post(snapshot: dict) -> str:
 
     snapshot 구조는 output/export/latest.json 과 같고 charts 와 labels 키가
     게시물용으로 추가된다. labels 는 config/thresholds.yaml 에서 온다.
-    FredUtil.build_snapshot() 이 만든 것을 그대로 받는다.
+    LiquidityCalculator.build_snapshot() 이 만든 것을 그대로 받는다.
     """
     meta = snapshot["meta"]
     derived = snapshot["derived"]
@@ -425,3 +446,138 @@ s.onload=boot;
 document.head.appendChild(s);
 }})();
 </script>"""
+
+
+# --- 확인용 문서 ---
+#
+# 담는 것은 실제로 MQWAY 에 올라갈 본문뿐이다. 하네스나 설명, 검사 결과
+# 같은 것은 넣지 않는다. 화면에 보이는 것이 곧 게시물에 보일 것이다.
+#
+# 감싸개가 하는 일은 세 가지뿐이고 모두 MQWAY 페이지가 이미 해 주는 것이다.
+#   - <meta charset="utf-8">. 없으면 윈도우 브라우저가 cp949 로 읽어 한글이 깨진다
+#   - Noto Sans KR / Outfit 로드. MQWAY 가 전역으로 부른다
+#   - 페이지 배경 #F8F9FA 와 기본 서체. MQWAY body 의 값 그대로다
+#
+# 본문 자체는 한 글자도 바꾸지 않는다.
+
+# mqway.com 의 body 설정값. 게시물이 실제로 놓이는 바닥을 그대로 재현한다.
+PAGE_CSS = (
+    "body{margin:0;padding:20px 16px;background:#F8F9FA;color:#2D3047;"
+    "font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif}"
+    ".mq-page{max-width:860px;margin:0 auto}"
+)
+
+FONTS = (
+    "https://fonts.googleapis.com/css2"
+    "?family=Outfit:wght@400;500;600"
+    "&family=Noto+Sans+KR:wght@400;500;600;700&display=swap"
+)
+
+# --- 썸네일 ---
+#
+# 게시물은 이미지를 만들지 않으므로 날짜와 무관한 고정 이미지를 한 장 둔다.
+# 한 번 만들어 img/thumbnail.png 로 커밋해 두면 이후 실행에서는 그 파일을 쓴다.
+# 색은 mqway.com tailwind.config 값을 그대로 쓴다. 글자는 맑은 고딕으로 굽는다.
+# 서버에 한글 폰트가 없어도 되도록 이미지로 미리 만들어 두는 것이다.
+
+# 게시판 카드 비율에 맞춘 크기. ApiUtil 이 800px 로 줄이므로 그 이하로 만든다.
+THUMB_WIDTH, THUMB_HEIGHT = 800, 420
+
+# mqway.com tailwind.config
+THUMB_INK = (45, 48, 71)         # #2D3047
+THUMB_ACCENT = (255, 77, 77)     # #FF4D4D
+THUMB_SURFACE = (248, 249, 250)  # #F8F9FA
+THUMB_MUTED = (107, 114, 128)    # #6B7280
+
+FONT_BOLD = Path("C:/Windows/Fonts/malgunbd.ttf")
+FONT_REG = Path("C:/Windows/Fonts/malgun.ttf")
+
+
+class ReportGenerator:
+    def __init__(self):
+        self.logger = LoggerUtil().get_logger()
+
+    def create_post(self, snapshot: dict) -> str:
+        """post.html 과 latest.json 을 쓴다. 본문 문자열을 돌려준다."""
+        body = render_post(snapshot)
+        POST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        POST_PATH.write_text(body, encoding="utf-8")
+
+        # latest.json 은 게시물과 별개 산출물이다. charts 와 labels 는 게시물
+        # 전용이라 빼고, 시리즈별 출처 기관은 여기에 전부 싣는다(법적 의무 3).
+        latest = {
+            "meta": snapshot["meta"],
+            "layers": snapshot["layers"],
+            "derived": snapshot["derived"],
+        }
+        LATEST_PATH.write_text(
+            json.dumps(latest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        self.logger.info(f"산출물: {POST_PATH}")
+        self.logger.info(f"        {LATEST_PATH}")
+        return body
+
+    def create_preview(self, fragment: str, as_of_label: str, out: Path = PREVIEW_PATH) -> Path:
+        """본문 조각을 감싼 확인용 문서를 만든다."""
+        title = post_title(as_of_label)
+        page = f"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{FONTS}">
+<style>{PAGE_CSS}</style>
+</head>
+<body>
+<div class="mq-page">
+{fragment}
+</div>
+</body>
+</html>"""
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(page, encoding="utf-8")
+
+        body_size = len(fragment.encode("utf-8"))
+        self.logger.info(
+            f"본문 {body_size:,} B (MQWAY 상한 65,536 B, 여유 {65536 - body_size:,} B)"
+        )
+        self.logger.info(f"감싸개까지 {len(page.encode('utf-8')):,} B")
+        self.logger.info(f"확인용 문서: {out}")
+        self.logger.info(f"브라우저에서 열기: {out.as_uri()}")
+        return out
+
+    @staticmethod
+    def _font(path: Path, size: int):
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+        return ImageFont.load_default()
+
+    def create_thumbnail(self, out: Path = THUMBNAIL_PATH) -> Path:
+        img = Image.new("RGB", (THUMB_WIDTH, THUMB_HEIGHT), THUMB_SURFACE)
+        d = ImageDraw.Draw(img)
+
+        # 왼쪽 액센트 띠
+        d.rectangle([0, 0, 10, THUMB_HEIGHT], fill=THUMB_ACCENT)
+
+        d.text((56, 92), "미국 유동성 지표", font=self._font(FONT_BOLD, 58), fill=THUMB_INK)
+        d.text((56, 172), "주간 브리핑", font=self._font(FONT_BOLD, 58), fill=THUMB_INK)
+
+        d.line([(56, 268), (176, 268)], fill=THUMB_ACCENT, width=4)
+
+        d.text((56, 296), "연준 대차대조표 / 지급준비금 / 순유동성",
+               font=self._font(FONT_REG, 24), fill=THUMB_MUTED)
+        d.text((56, 334), "출처 FRED", font=self._font(FONT_REG, 22), fill=THUMB_MUTED)
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img.save(out, format="PNG", optimize=True)
+        self.logger.info(
+            f"썸네일 생성: {out}  ({out.stat().st_size / 1024:.1f} KB, "
+            f"{THUMB_WIDTH}x{THUMB_HEIGHT})"
+        )
+        return out
