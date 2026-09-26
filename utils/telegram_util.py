@@ -53,14 +53,28 @@ class TelegramUtil:
                 data={"chat_id": chat_id, "parse_mode": "HTML", "text": text},
                 timeout=TIMEOUT_SEC,
             )
-            resp.raise_for_status()
-            return bool(resp.json().get("ok"))
-        # 알림 실패로 작업을 죽이지 않는다
+        # 알림 실패로 작업을 죽이지 않는다. 예외 메시지에는 봇 토큰이 든
+        # 요청 URL 이 들어가므로 예외 종류만 남긴다.
         except Exception as exc:
+            self.logger.error(f"텔레그램 전송 실패 (chat_id={chat_id}): {type(exc).__name__}")
+            return False
+
+        try:
+            body = resp.json()
+        except ValueError:
+            body = {}
+        if resp.status_code != 200 or not body.get("ok"):
+            reason = body.get("description") or resp.text[:120]
             self.logger.error(
-                f"텔레그램 전송 실패: {type(exc).__name__}: {str(exc)[:120]}"
+                f"텔레그램 전송 실패 (chat_id={chat_id}): HTTP {resp.status_code} {reason}"
             )
             return False
+
+        # 받아준 방 이름을 남긴다. 엉뚱한 방으로 가도 로그로 알아챌 수 있다.
+        chat = body.get("result", {}).get("chat", {})
+        name = chat.get("title") or chat.get("username") or chat.get("first_name") or "?"
+        self.logger.info(f"텔레그램 전송 완료 (chat_id={chat_id}, 방 {name})")
+        return True
 
     def send_message(self, text: str) -> bool:
         """운영 방으로 보낸다."""
