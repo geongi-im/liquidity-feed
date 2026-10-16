@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html as html_mod
 import os
+import time
 from pathlib import Path
 
 import httpx
@@ -28,6 +29,10 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 API = "https://api.telegram.org"
 TIMEOUT_SEC = 15.0
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SEC = 2
+MAX_RETRY_AFTER_SEC = 60
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def env(name: str) -> str:
@@ -47,28 +52,45 @@ class TelegramUtil:
         if not token or not chat_id:
             self.logger.debug("텔레그램 설정이 없어 알림을 건너뛴다")
             return False
-        try:
-            resp = httpx.post(
-                f"{API}/bot{token}/sendMessage",
-                data={"chat_id": chat_id, "parse_mode": "HTML", "text": text},
-                timeout=TIMEOUT_SEC,
-            )
-        # 알림 실패로 작업을 죽이지 않는다. 예외 메시지에는 봇 토큰이 든
-        # 요청 URL 이 들어가므로 예외 종류만 남긴다.
-        except Exception as exc:
-            self.logger.error(f"텔레그램 전송 실패 (chat_id={chat_id}): {type(exc).__name__}")
-            return False
+        # 네트워크 오류, 429, 5xx 는 잠깐 쉬고 다시 보낸다. 400 같은 요청 오류는
+        # 다시 보내도 같으니 바로 끝낸다. 응답 대기 시간 초과 뒤 재시도하면 이미
+        # 도착한 알림이 한 번 더 갈 수 있다.
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            wait_sec = RETRY_BACKOFF_SEC * attempt
+            try:
+                resp = httpx.post(
+                    f"{API}/bot{token}/sendMessage",
+                    data={"chat_id": chat_id, "parse_mode": "HTML", "text": text},
+                    timeout=TIMEOUT_SEC,
+                )
+            # 알림 실패로 작업을 죽이지 않는다. 예외 메시지에는 봇 토큰이 든
+            # 요청 URL 이 들어가므로 예외 종류만 남긴다.
+            except Exception as exc:
+                failure = type(exc).__name__
+                retryable = isinstance(exc, httpx.TransportError)
+            else:
+                try:
+                    body = resp.json()
+                except ValueError:
+                    body = {}
+                if resp.status_code == 200 and body.get("ok"):
+                    break
+                reason = body.get("description") or resp.text[:120]
+                failure = f"HTTP {resp.status_code} {reason}"
+                retryable = resp.status_code in RETRYABLE_STATUS_CODES
+                retry_after = (body.get("parameters") or {}).get("retry_after")
+                if retry_after:
+                    wait_sec = min(int(retry_after) + 1, MAX_RETRY_AFTER_SEC)
 
-        try:
-            body = resp.json()
-        except ValueError:
-            body = {}
-        if resp.status_code != 200 or not body.get("ok"):
-            reason = body.get("description") or resp.text[:120]
-            self.logger.error(
-                f"텔레그램 전송 실패 (chat_id={chat_id}): HTTP {resp.status_code} {reason}"
+            if not retryable or attempt == MAX_ATTEMPTS:
+                self.logger.error(
+                    f"텔레그램 전송 실패 (chat_id={chat_id}, {attempt}/{MAX_ATTEMPTS}): {failure}"
+                )
+                return False
+            self.logger.warning(
+                f"텔레그램 전송 재시도 (chat_id={chat_id}, {attempt}/{MAX_ATTEMPTS}): {failure}"
             )
-            return False
+            time.sleep(wait_sec)
 
         # 받아준 방 이름을 남긴다. 엉뚱한 방으로 가도 로그로 알아챌 수 있다.
         chat = body.get("result", {}).get("chat", {})
